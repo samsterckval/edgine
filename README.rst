@@ -10,7 +10,7 @@ Edgine
         :target: https://travis-ci.com/samsterckval/edgine
 
 .. image:: https://readthedocs.org/projects/edgine/badge/?version=latest
-        :target: https://edgine.readthedocs.io/en/latest/?version=latest
+        :target: edgine.rtfd.io
         :alt: Documentation Status
 
 
@@ -20,7 +20,7 @@ A way to easily created embedded HPC systems
 
 
 * Free software: MIT license
-* Documentation: https://edgine.readthedocs.io.
+* Documentation: https://edgine.rtfd.io.
 
 
 Features
