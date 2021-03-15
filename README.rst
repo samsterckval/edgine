@@ -6,7 +6,7 @@ Edgine
 .. image:: https://img.shields.io/pypi/v/edgine.svg
         :target: https://pypi.python.org/pypi/edgine
 
-.. image:: https://img.shields.io/travis/samsterckval/edgine.svg
+.. image:: https://img.shields.io/travis/com/samsterckval/edgine
         :target: https://travis-ci.com/samsterckval/edgine
 
 .. image:: https://readthedocs.org/projects/edgine/badge/?version=latest
