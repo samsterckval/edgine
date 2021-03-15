@@ -10,7 +10,7 @@ Edgine
         :target: https://travis-ci.com/samsterckval/edgine
 
 .. image:: https://readthedocs.org/projects/edgine/badge/?version=latest
-        :target: edgine.rtfd.io
+        :target: https://edgine.readthedocs.io/en/latest/
         :alt: Documentation Status
 
 
