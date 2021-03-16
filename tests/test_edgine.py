@@ -5,8 +5,8 @@
 
 import unittest
 from multiprocessing import Queue
-from edgine import edgine
 from edgine.src.config import Config
+import time
 
 
 class TestEdgine(unittest.TestCase):
@@ -22,22 +22,19 @@ class TestEdgine(unittest.TestCase):
     def test_000_something(self):
         """Test something."""
 
-    def test_001_hello_world(self):
-        output = edgine.hello_world()
-        assert(output == self.hello_message)
-
-    def test_002_config_update_bad(self):
+    def test_001_config_update_bad(self):
         config = Config()
         ret = config.update()
         assert(ret is False)
 
-    def test_003_config_write_exception(self):
+    def test_002_config_write_exception(self):
         config = Config()
         self.assertRaises(PermissionError, config.__setattr__, "test", "test")
 
-    def test_004_config_update_good(self):
+    def test_003_config_update_good(self):
         q = Queue()
         config = Config(in_q=q)
-        q.put_nowait(["test_name", "test"])
+        q.put_nowait(["test_name", "test_value"])
         config.update()
-        assert(config.test_name == "test")
+        time.sleep(0.001)
+        assert(config.test_name == "test_value")

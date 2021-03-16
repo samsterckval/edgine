@@ -23,7 +23,8 @@ class EdgineBase:
             self._logging_q.put_nowait({level: [self._name, msg]})
         except Exception as e:
             timestr: str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-            print(f"({timestr}) [LOG_QUEUE_ERROR] {e} while sending msg : {msg}")
+            print(f"({timestr}) [LOG_QUEUE_ERROR] {e} while "
+                  f"sending msg : {msg}")
 
     def error(self, msg: str):
         self.log(self._cfg.logging_error, msg)

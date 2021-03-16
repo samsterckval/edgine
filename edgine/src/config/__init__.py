@@ -12,7 +12,10 @@ class Config:
 
     """
 
-    def __init__(self, in_q: Queue = None, start_version: int = 0, name: str = "noname") -> None:
+    def __init__(self,
+                 in_q: Queue = None,
+                 start_version: int = 0,
+                 name: str = "noname") -> None:
         self._in_q: Queue = in_q
         self._version: int = start_version
         self._name: str = name
@@ -43,18 +46,12 @@ class Config:
 
         return updated
 
-    # def __setattr__(self, name: str, value: Any) -> None:
-    #
-    #     if name not in self._unique_names:
-    #         raise PermissionError(f"You can only set unique_names attributes of child Config {self._name}, "
-    #                               f"the rest is read only")
-    #     else:
-    #         self.__dict__[name] = value
-
     def __setattr_overwrite(self, name: str, value: Any) -> None:
 
         if name not in self._unique_names:
-            raise PermissionError(f"You can only set unique_names attributes of child Config {self._name}, "
+            raise PermissionError(f"You can only set unique_names "
+                                  f"attributes of child "
+                                  f"Config {self._name}, "
                                   f"the rest is read only")
         else:
             self.__dict__[name] = value
@@ -73,7 +70,9 @@ class Config:
             if name in self.__dict__.keys():
                 return self.__dict__[name]
             else:
-                raise AttributeError(f"The config {self._name} has no attribute {name}, not even after updating.")
+                raise AttributeError(f"The config {self._name} has "
+                                     f"no attribute {name}, not even "
+                                     f"after updating.")
 
     def __str__(self, pretty: bool = False) -> str:
         if pretty:
@@ -109,7 +108,8 @@ class ConfigMaster:
         """
         Just don't
         """
-        raise PermissionError(f"You cannot read from the master config, use this as setup")
+        raise PermissionError(f"You cannot read from the "
+                              f"master config, use this as setup")
 
     def get_clean_dict(self) -> dict:
         out_dict = self.__dict__
@@ -133,7 +133,8 @@ class ConfigMaster:
 
 class ConfigServer:
     """
-    This will hold the ground truth config and send updates to the external copies
+    This will hold the ground truth config and
+    send updates to the external copies
     """
     def __init__(self, filepath: str):
         self._filepath = filepath
