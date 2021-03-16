@@ -33,7 +33,7 @@ class Config:
             while c < 1000:
                 try:
                     data: List[str, Any] = self._in_q.get_nowait()
-                    self.__setattr__(data[0], data[1])
+                    self.__dict__[data[0]] = data[1]
                     updated = True
                 except queue.Empty:
                     break
