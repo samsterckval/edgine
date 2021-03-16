@@ -2,7 +2,7 @@
 
 
 def hello_world():
-    return("Get Edgy!")
+    return "Get Edgy!"
 
 
 def say_hello():
