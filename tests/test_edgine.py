@@ -4,7 +4,7 @@
 
 
 import unittest
-
+from multiprocessing import Queue
 from edgine import edgine
 from edgine.src.config import Config
 
@@ -34,3 +34,10 @@ class TestEdgine(unittest.TestCase):
     def test_003_config_write_exception(self):
         config = Config()
         self.assertRaises(PermissionError, config.__setattr__, "test", "test")
+
+    def test_004_config_update_good(self):
+        q = Queue()
+        config = Config(in_q=q)
+        q.put_nowait(["test_name", "test"])
+        config.update()
+        assert(config.test_name == "test")
