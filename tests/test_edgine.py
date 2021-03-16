@@ -9,10 +9,6 @@ from edgine import edgine
 from edgine.src.config import Config
 
 
-def helper_config_write_exception(config: Config):
-    config.testing = "some test"
-
-
 class TestEdgine(unittest.TestCase):
     """Tests for `edgine` package."""
 
@@ -37,4 +33,4 @@ class TestEdgine(unittest.TestCase):
 
     def test_003_config_write_exception(self):
         config = Config()
-        self.assertRaises(PermissionError, helper_config_write_exception, config)
+        self.assertRaises(PermissionError, setattr(config, "test", "test"), config)
