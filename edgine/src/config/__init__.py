@@ -18,6 +18,7 @@ class Config:
         self._name: str = name
         self._unique_names: List[str] = list(self.__dict__.keys())
         self._unique_names.append("_unique_names")
+        self.__setattr__ = self.__setattr_overwrite
 
     def update(self) -> bool:
         """
@@ -42,7 +43,15 @@ class Config:
 
         return updated
 
-    def __setattr__(self, name: str, value: Any) -> None:
+    # def __setattr__(self, name: str, value: Any) -> None:
+    #
+    #     if name not in self._unique_names:
+    #         raise PermissionError(f"You can only set unique_names attributes of child Config {self._name}, "
+    #                               f"the rest is read only")
+    #     else:
+    #         self.__dict__[name] = value
+
+    def __setattr_overwrite(self, name: str, value: Any) -> None:
 
         if name not in self._unique_names:
             raise PermissionError(f"You can only set unique_names attributes of child Config {self._name}, "
