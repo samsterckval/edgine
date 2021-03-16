@@ -33,4 +33,4 @@ class TestEdgine(unittest.TestCase):
 
     def test_003_config_write_exception(self):
         config = Config()
-        self.assertRaises(PermissionError, setattr, config, "test", "test")
+        self.assertRaises(PermissionError, config.__setattr__, "test", "test")
