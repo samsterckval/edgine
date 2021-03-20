@@ -4,8 +4,10 @@
 
 
 import unittest
-from multiprocessing import Queue
-from edgine.src.config import Config
+from multiprocessing import Queue, Event
+# import multiprocessing
+from edgine.src.config.config import Config
+from edgine.src.config.config_server import ConfigServer
 import time
 
 
@@ -23,18 +25,35 @@ class TestEdgine(unittest.TestCase):
         """Test something."""
 
     def test_001_config_update_bad(self):
+        """Test is config returns false if we try to update from a None queue"""
         config = Config()
         ret = config.update()
         assert(ret is False)
 
     def test_002_config_write_exception(self):
+        """Test is child config refuses write"""
         config = Config()
         self.assertRaises(PermissionError, config.__setattr__, "test", "test")
 
     def test_003_config_update_good(self):
+        """Test is child config updates from queue"""
         q = Queue()
         config = Config(in_q=q)
         q.put_nowait(["test_name", "test_value"])
+        time.sleep(0.1)
         config.update()
-        time.sleep(0.001)
+        time.sleep(0.1)
         assert(config.test_name == "test_value")
+
+    def test_004_configserver(self):
+        """Test if children get updated from config master"""
+        fake_stop = Event()
+        cs = ConfigServer(stop_event=fake_stop, name="test-cs")
+        config = cs.get_config_copy()
+        cs.config.test_004 = "configserver"
+        cs.start()
+        time.sleep(1.1)
+        fake_stop.set()
+        cs.join()
+        config.update()
+        assert(config.test_004 == "configserver")
