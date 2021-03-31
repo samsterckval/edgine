@@ -115,7 +115,6 @@ class ConfigServer(Process):
         return new_config
 
     def update_children(self, kv: List):
-        # print(f"{self.__dict__} : updating children")
         for q in self._child_qs:
             q.put_nowait(kv)
 

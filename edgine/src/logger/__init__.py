@@ -1,10 +1,17 @@
 from multiprocessing import Process, Queue, Event
-from typing import Dict
+from typing import Dict, List
 from datetime import datetime
 import queue
 import time
-from edgine.src.config import Config as cfg
+from edgine.src.config.config import Config
+from edgine.src.config.config_server import ConfigServer
 import json
+
+LOGGING_LEVELS = ['ERR', 'LOG', 'INF', 'DEB']
+ERROR = 0
+LOG = 1
+INFO = 2
+DEBUG = 3
 
 
 class EdgineLogger(Process):
@@ -14,157 +21,177 @@ class EdgineLogger(Process):
 
     def __init__(self,
                  stop_event: Event,
-                 incoming_q: Queue,
-                 outgoing_q: Queue = None,
-                 outgoing_method: str = "json",
-                 print_to_screen: bool = True,):
+                 config_server: ConfigServer,
+                 in_q: Queue,
+                 out_qs: List[Queue] = None):
 
-        super(EdgineLogger, self).__init__()
-        self._incoming_q: Queue = incoming_q
-        self._outgoing_q: Queue = outgoing_q
-        self._outgoing_method: str = outgoing_method
-        self._print_to_screen: bool = print_to_screen
+        Process.__init__(self, name="LOG")
+
+        if out_qs is None:
+            self._out_qs: List = [None]
+        else:
+            self._out_qs: List[Queue] = [None, *out_qs]
+
+        # Check if the right config fields already exist, if not, create them
+        if not config_server.config.has_key("log_rate_limiting_list"):
+            config_server.config.log_rate_limiting_list = []
+            for i in range(len(out_qs)):
+                config_server.config.log_rate_limiting_list.append(1000)
+        elif len(config_server.config.log_rate_limiting_list) < len(out_qs):
+            for i in range(len(out_qs) - len(config_server.config.log_rate_limiting_list)):
+                config_server.config.log_rate_limiting_list.append(1000)
+
+        if not config_server.config.has_key("log_print_to_screen"):
+            config_server.config.log_print_to_screen = True
+
+        if not config_server.config.has_key("log_rejection_list"):
+            config_server.config.log_rejection_list = []
+            for i in range(len(out_qs)):
+                config_server.config.log_rejection_list.append([])
+        elif len(config_server.config.log_rejection_list) < len(out_qs):
+            for i in range(len(out_qs) - len(config_server.config.log_rejection_list)):
+                config_server.config.log_rejection_list.append([])
+
+        if not config_server.config.has_key("log_logging_lvl"):
+            config_server.config.log_logging_lvl = []
+            for i in range(len(out_qs)):
+                config_server.config.log_logging_lvl.append(INFO)
+        elif len(config_server.config.log_logging_lvl) < len(out_qs):
+            for i in range(len(out_qs) - len(config_server.config.log_logging_lvl)):
+                config_server.config.log_logging_lvl.append(INFO)
+
+        self._cfg = config_server.get_config_copy()
+        self._in_q: Queue = in_q
+
         self._stop_event: Event = stop_event
-        self._screen_rate_limit: int = cfg.screen_log_rate_limiter
 
-        self._allowance_screen: float = self._screen_rate_limit
-        self._last_screen_msg: float = time.time()
-        self._dropped_screen_msg_count: int = 0
+        # All other rate limiters
+        self._log_allowance: List[float] = []
+        self._log_last_msg: List[float] = []
+        self._log_dropped_msg_count: List[int] = []
+        self._log_last_limit_print: List[float] = []
 
-        self._last_screen_rate_limiter_print: float = time.time()
-        self._last_mqtt_rate_limiter_print: float = time.time()
+        for i in range(len(self._out_qs) + 1):
+            self.init_rate_limiter(i)
 
-    @property
-    def dropped_msg_count(self):
-        return self._dropped_screen_msg_count
+    def init_rate_limiter(self, index: int):
+        """
+        Initialises the rate limiter for output at index
+        :param index: index of the rate limiter to init
+        :return: None
+        """
+        try:
+            self._log_allowance[index] = self._cfg.log_rate_limiting_list[index]
+            self._log_last_msg[index] = time.time()
+            self._log_dropped_msg_count[index] = 0
+            self._log_last_limit_print[index] = time.time()
+        except IndexError as e:
+            if len(self._log_allowance) + 1 == index:
+                self._log_allowance.append(self._cfg.log_rate_limiting_list[index])
+                self._log_last_msg.append(time.time())
+                self._log_dropped_msg_count.append(0)
+                self._log_last_limit_print.append(time.time())
+            else:
+                self.output(ERROR,
+                            self.name,
+                            f"Trying to init a rate_limiter further than 1 "
+                            f"ahead of current index :"
+                            f"len(list) = {len(self._log_allowance)}; index : {index}")
 
-    @property
-    def incoming_q(self) -> Queue:
-        return self._incoming_q
-
-    @incoming_q.setter
-    def incoming_q(self, value: Queue):
-        self._incoming_q = value
-
-    @property
-    def outgoing_q(self) -> Queue:
-        return self._outgoing_q
-
-    @outgoing_q.setter
-    def outgoing_q(self, value: Queue):
-        self._outgoing_q = value
-
-    @property
-    def outgoing_method(self) -> str:
-        return self.outgoing_method
-
-    @outgoing_method.setter
-    def outgoing_method(self, value: str):
-        self._outgoing_method = value
-
-    @property
-    def print_to_screen(self) -> bool:
-        return self._print_to_screen
-
-    @print_to_screen.setter
-    def print_to_screen(self, value: bool):
-        self._print_to_screen = value
-
-    @property
-    def stop_event(self) -> Event:
-        return self._stop_event
-
-    def get_dropped_msg_count(self) -> int:
-        return self.dropped_msg_count
+                raise IndexError(e)
 
     def create_output_line(self, level: int, sender: str, msg: str) -> str:
+        """
+        Create an output line
+        :param level: Logging level of msg
+        :param sender: Sender of msg
+        :param msg: Message
+        :return: Output line as str
+        """
         try:
             timestr: str = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
-            out = f"{cfg.logging_levels[level]}:({timestr}) [{sender}] {msg}"
+            out = f"{LOGGING_LEVELS[level]}:({timestr}) [{sender}] {msg}"
         except Exception as e:
-            self.display(self.create_output_line(cfg.logging_error,
-                                                 'LOG',
-                                                 f"Error in create_output_line with (lvl, sender, message):({level}, {sender}, {msg}) : {str(e)}"))
+            print(f"[ERR] %m/%d/%Y %H:%M:%S : "
+                  f"Error in create_output_line with "
+                  f"(lvl, sender, message):({level}, {sender}, {msg}) : {str(e)}")
             out = ""
         return out
 
-    def print_screen_rate_limiter(self):
+    def print_rate_limiter(self, index: int):
         """
-        Prints the rate limiting messages
-        :return: None
+        Print rate limiting message
+        :param index: index of output rate limiter
+        :return: Nothing
         """
-        if self._dropped_screen_msg_count > 0:
-            self.output(cfg.logging_info,
-                        'LOG',
-                        f"Screen rate limiter dropped {self._dropped_screen_msg_count} messages in the last second")
 
-        self._dropped_screen_msg_count = 0
-        self._last_screen_rate_limiter_print = time.time()
+        if self._log_dropped_msg_count[index] > 0:
+            self.output((INFO,
+                         self.name,
+                         f"Rate limiter dropped "
+                         f"{self._log_dropped_msg_count[index]} messages to"
+                         f"output {index} in the last second"))
 
-    def display(self, msg: str):
+        self._log_dropped_msg_count[index] = 0
+        self._log_last_limit_print[index] = time.time()
+
+    def sent_out(self, index: int, msg: str):
         """
-        Prints the messages to screen
-        :param msg: the message to print
-        :return: none
+        This actually sends a message over a Q
+        :param index: Index of the outgoing Q, index of 0 will use built-in print function
+        :param msg: Message to send
+        :return: Nothing
         """
-        if self.print_to_screen:
-            # Check how long it has been since last message
-            now = time.time()
-            time_passed = now - self._last_screen_msg
 
-            # Update the time of the last message
-            self._last_screen_msg = now
+        now = time.time()
+        time_passed = now - self._log_last_msg[index]
 
-            # Update the allowance of messages to the screen, and cap it
-            self._allowance_screen += time_passed * float(self._screen_rate_limit)
-            if self._allowance_screen >= self._screen_rate_limit:
-                self._allowance_screen = self._screen_rate_limit
+        time_passed_since_rate_print = now - self._log_last_limit_print[index]
 
-            # Check if we can still print a message, if so, print it, else, drop it
-            if self._allowance_screen >= 1.0:
+        if time_passed_since_rate_print > 1.0:
+            self.print_rate_limiter(index)
+
+        self._log_last_msg[index] = now
+
+        self._log_allowance[index] += time_passed * float(self._cfg.log_rate_limiting_list[index])
+        if self._log_allowance[index] >= self._cfg.log_rate_limiting_list[index]:
+            self._log_allowance[index] = self._cfg.log_rate_limiting_list[index]
+
+        if self._log_allowance[index] >= 1.0:
+            if index == 0:
                 print(msg)
-                self._allowance_screen -= 1.0
             else:
-                self._dropped_screen_msg_count += 1
+                self._out_qs[index].put_nowait(msg)
+            self._log_allowance[index] -= 1.0
+        else:
+            self._log_dropped_msg_count[index] += 1
 
-    def output(self, level: int, sender: str, msg: str):
-        if sender not in cfg.screen_logging_rejection_list and cfg.screen_logging_level > level:
-            self.display(self.create_output_line(level, sender, msg))
+    def output(self, lvl: int, sender: str, msg: str):
+        out_str = self.create_output_line(lvl, sender, msg)
+
+        for i in range(len(self._out_qs)):
+            if sender not in self._cfg.log_rejection_list[i] and self._cfg.log_logging_lvl[i] <= lvl:
+                self.sent_out(i, out_str)
 
     def run(self) -> None:
-        self.output(cfg.logging_info, "LOG", "Logger is live!")
+        self.output(INFO, self.name, f"Hello there!")
 
-        while not self._stop_event.is_set():
+        stop_loop: bool = False
+
+        while not stop_loop:
 
             try:
-                incoming_data: Dict = self.incoming_q.get_nowait()
+                incoming_data: Dict = self._in_q.get_nowait()
 
                 for level, [sender, msg] in incoming_data.items():
                     self.output(level, sender, msg)
             except queue.Empty:
                 self._stop_event.wait(timeout=0.01)
+                if self._stop_event.is_set():
+                    stop_loop = True
             except Exception as e:
-                self.output(cfg.logging_error, "LOG", f"Error in run : {str(e)}")
+                self.output(ERROR, self.name, f"Error in run : {str(e)}")
 
-            if time.time() - self._last_screen_rate_limiter_print > 1.0:
-                self.print_screen_rate_limiter()
-
-        while not self._incoming_q.empty():
-            try:
-                tmp = self._incoming_q.get_nowait()
-            except queue.Empty:
-                pass
-
-        while not self._incoming_q.empty():
-            try:
-                tmp = self._outgoing_q.get_nowait()
-            except queue.Empty:
-                pass
-
-        self._incoming_q.close()
-        if (self._outgoing_q is not None):
-            self._outgoing_q.close()
-
-        self.output(cfg.logging_info,
-                    'LOG',
-                    "Quitting.")
+        self.output(INFO,
+                    self.name,
+                    "Quitting")

@@ -28,6 +28,17 @@ class Config:
         self.changelist: List = []
         self._initialized = True
 
+    def has_key(self, key: str) -> bool:
+        """
+        Check if this config has a key
+        :param key: Key to check
+        :return: True/False
+        """
+        if key in self.__dict__.keys():
+            return True
+        else:
+            return False
+
     def update(self) -> bool:
         """
         This will check if there is an update in the pipe
@@ -92,13 +103,8 @@ class Config:
         if name in self.__dict__.keys():
             return self.__dict__[name]
         else:
-            # self.update()
-            # if name in self.__dict__.keys():
-            #     return self.__dict__[name]
-            # else:
-                raise AttributeError(f"This config has "
-                                     f"no attribute {name}, not even "
-                                     f"after updating.")
+            raise AttributeError(f"This config has "
+                                 f"no attribute {name}")
 
     def __str__(self, pretty: bool = False) -> str:
         if pretty:
