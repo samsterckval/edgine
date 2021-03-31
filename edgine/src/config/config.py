@@ -35,11 +35,11 @@ class Config:
         """
         updated = False
 
-        print("update called")
+        # print("update called")
 
         if self._in_q is not None:
 
-            print("queue found")
+            # print("queue found")
 
             c = 0
             while c < 1000:
@@ -52,10 +52,10 @@ class Config:
                         print(f"updated : {key}: {value}")
                         updated = True
                     else:
-                        print("unique name found, skipping")
+                        # print("unique name found, skipping")
                         continue
                 except queue.Empty:
-                    print("queue empty, bye")
+                    # print("queue empty, bye")
                     break
                 except Exception as e:
                     print(f"Unknown exception in Config.update : {e}")

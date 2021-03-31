@@ -9,6 +9,7 @@ from multiprocessing import Queue, Event
 from edgine.src.config.config import Config
 from edgine.src.config.config_server import ConfigServer
 import time
+import os
 
 
 class TestEdgine(unittest.TestCase):
@@ -57,3 +58,12 @@ class TestEdgine(unittest.TestCase):
         cs.join()
         config.update()
         assert(config.test_004 == "configserver")
+
+    def test_005_saveconfig(self):
+        """Test if a new config can be loaded from a file"""
+        fake_stop = Event()
+        cs = ConfigServer(stop_event=fake_stop, name="test-cs", config_file="config.json")
+        cs.config.test_005 = "saveconfig"
+        cs.save_config()
+        cs2 = ConfigServer(stop_event=fake_stop, name="test-cs2", config_file="config.json")
+        assert(cs2.config.test_005 == cs.config.test_005)

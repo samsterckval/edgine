@@ -1,7 +1,8 @@
 from multiprocessing import Queue, Process, Event
 from edgine.src.config.config import Config
 import json
-from typing import List
+import os
+from typing import List, Dict
 
 
 class ConfigServer(Process):
@@ -24,6 +25,7 @@ class ConfigServer(Process):
         self.config: Config = Config(in_q=None, name="master-config", master=True)
         self.config._initialized = False
         self._child_qs: List[Queue] = []
+        self.load_config()
         self.save_config()
 
     def get_clean_config_dict(self):
@@ -40,7 +42,7 @@ class ConfigServer(Process):
         print("starting ConfigServer")
         while not self._stop_event.is_set():
             while len(self.config.changelist) > 0:
-                print(f"Changelist found with len {len(self.config.changelist)}")
+                # print(f"Changelist found with len {len(self.config.changelist)}")
                 self.update_children(self.config.changelist.pop(0))
 
             self._stop_event.wait(timeout=1)
@@ -50,8 +52,9 @@ class ConfigServer(Process):
     def save_config(self) -> bool:
         """
         Save current config to file
-        :return: None
+        :return: False if no file or exception, True else
         """
+        print("Saving config")
         if self._filepath is not None:
             try:
                 config = self.get_clean_config_dict()
@@ -63,6 +66,26 @@ class ConfigServer(Process):
             finally:
                 return True
         else:
+            return False
+
+    def load_config(self) -> bool:
+        """
+        Load a config from the config file
+        :return: False if file not found, True else
+        """
+        try:
+            with open(self._filepath, 'r') as f:
+                config_dict: Dict = json.load(f)
+
+                for k, v in config_dict.items():
+                    self.config.__dict__[k] = v
+
+                return True
+        except IOError as e:
+            print(f"File not accessible : {e}")
+            return False
+        except Exception as e:
+            print(f"Unknown exception : {e}")
             return False
 
     def get_config_copy(self) -> Config:
