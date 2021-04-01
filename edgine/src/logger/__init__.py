@@ -35,30 +35,32 @@ class EdgineLogger(Process):
         # Check if the right config fields already exist, if not, create them
         if not config_server.config.has_key("log_rate_limiting_list"):
             config_server.config.log_rate_limiting_list = []
-            for i in range(len(out_qs)):
+            for i in range(len(self._out_qs)):
                 config_server.config.log_rate_limiting_list.append(1000)
-        elif len(config_server.config.log_rate_limiting_list) < len(out_qs):
-            for i in range(len(out_qs) - len(config_server.config.log_rate_limiting_list)):
+        elif len(config_server.config.log_rate_limiting_list) < len(self._out_qs):
+            for i in range(len(self._out_qs) - len(config_server.config.log_rate_limiting_list)):
                 config_server.config.log_rate_limiting_list.append(1000)
-
-        if not config_server.config.has_key("log_print_to_screen"):
-            config_server.config.log_print_to_screen = True
 
         if not config_server.config.has_key("log_rejection_list"):
             config_server.config.log_rejection_list = []
-            for i in range(len(out_qs)):
+            for i in range(len(self._out_qs)):
                 config_server.config.log_rejection_list.append([])
-        elif len(config_server.config.log_rejection_list) < len(out_qs):
-            for i in range(len(out_qs) - len(config_server.config.log_rejection_list)):
+        elif len(config_server.config.log_rejection_list) < len(self._out_qs):
+            for i in range(len(self._out_qs) - len(config_server.config.log_rejection_list)):
                 config_server.config.log_rejection_list.append([])
 
         if not config_server.config.has_key("log_logging_lvl"):
             config_server.config.log_logging_lvl = []
-            for i in range(len(out_qs)):
+            for i in range(len(self._out_qs)):
                 config_server.config.log_logging_lvl.append(INFO)
-        elif len(config_server.config.log_logging_lvl) < len(out_qs):
-            for i in range(len(out_qs) - len(config_server.config.log_logging_lvl)):
+        elif len(config_server.config.log_logging_lvl) < len(self._out_qs):
+            for i in range(len(self._out_qs) - len(config_server.config.log_logging_lvl)):
                 config_server.config.log_logging_lvl.append(INFO)
+
+        if not config_server.config.has_key("log_print_to_screen"):
+            config_server.config.log_print_to_screen = True
+
+        config_server.save_config()
 
         self._cfg = config_server.get_config_copy()
         self._in_q: Queue = in_q
@@ -71,7 +73,7 @@ class EdgineLogger(Process):
         self._log_dropped_msg_count: List[int] = []
         self._log_last_limit_print: List[float] = []
 
-        for i in range(len(self._out_qs) + 1):
+        for i in range(len(self._out_qs)):
             self.init_rate_limiter(i)
 
     def init_rate_limiter(self, index: int):
@@ -86,7 +88,7 @@ class EdgineLogger(Process):
             self._log_dropped_msg_count[index] = 0
             self._log_last_limit_print[index] = time.time()
         except IndexError as e:
-            if len(self._log_allowance) + 1 == index:
+            if len(self._log_allowance) == index:
                 self._log_allowance.append(self._cfg.log_rate_limiting_list[index])
                 self._log_last_msg.append(time.time())
                 self._log_dropped_msg_count.append(0)
@@ -174,11 +176,13 @@ class EdgineLogger(Process):
                 self.sent_out(i, out_str)
 
     def run(self) -> None:
-        self.output(INFO, self.name, f"Hello there!")
+        self.output(INFO, self.name, f"Hello")
 
         stop_loop: bool = False
 
         while not stop_loop:
+
+            self._cfg.update()
 
             try:
                 incoming_data: Dict = self._in_q.get_nowait()

@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from edgine.src.config.config_server import ConfigServer
 from edgine.src.config.config import Config
+from edgine.src.logger import ERROR, INFO, DEBUG, LOG
 import time
 import queue
 
@@ -52,7 +53,7 @@ class EdgineBase(Process, ABC):
             return None
 
         try:
-            data = self._in_q.get_nowait()
+            data = self._in_q.get(timeout=self._min_runtime/2.0)
             self.debug(f"Data found of type {type(data)}")
             return data
         except queue.Empty:
@@ -66,8 +67,11 @@ class EdgineBase(Process, ABC):
         :param data: data to post
         :return: True if no exception
         """
+        if data is None:
+            return True
+
         try:
-            self.debug(f"Posting output to {len(self._out_qs)}")
+            self.debug(f"Posting output to {len(self._out_qs)} queue{'s' if len(self._out_qs) > 1 else ''}")
             for q in self._out_qs:
                 q.put_nowait(data)
         except Exception as e:
@@ -78,7 +82,9 @@ class EdgineBase(Process, ABC):
 
     def run(self) -> None:
         """Do stuff"""
+        self.info("Hello")
         while not self._stop_event.is_set():
+            self._cfg.update()
             s = time.time()
             if self._in_q is not None:
                 data = self.get_from_q()
@@ -104,14 +110,27 @@ class EdgineBase(Process, ABC):
             # Do we need to sleep?
             sleep_time = self._min_runtime - (el1+el2+el3)
             if sleep_time > 0:
+                self.debug(f"Sleeping for {sleep_time:.2f} additional seconds")
                 self._stop_event.wait(timeout=sleep_time)
+
+            self.debug(f"Stop event : {self._stop_event.is_set()}")
+
+        if self._in_q is not None:
+            self._in_q.close()
+
+        if len(self._out_qs) > 0:
+            for out_q in self._out_qs:
+                out_q.close()
+
+        self.info(f"Quitting")
+        return
 
     @abstractmethod
     def blogic(self, data_in: Any = None) -> Any:
         """Business logic, overwrite this method to implement your own logic"""
         return data_in+6 if type(data_in) == int else data_in
 
-    def log(self, level: int, msg: str):
+    def print(self, level: int, msg: str):
         try:
             self._logging_q.put_nowait({level: [self._name, msg]})
         except Exception as e:
@@ -120,10 +139,13 @@ class EdgineBase(Process, ABC):
                   f"sending msg : {msg}")
 
     def error(self, msg: str):
-        self.log(self._cfg.logging_error, msg)
+        self.print(ERROR, msg)
 
     def info(self, msg: str):
-        self.log(self._cfg.logging_info, msg)
+        self.print(INFO, msg)
 
     def debug(self, msg: str):
-        self.log(self._cfg.logging_debug, msg)
+        self.print(DEBUG, msg)
+
+    def log(self, msg: str):
+        self.print(LOG, msg)
