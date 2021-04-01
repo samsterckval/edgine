@@ -109,20 +109,15 @@ class EdgineBase(Process, ABC):
 
             # Do we need to sleep?
             sleep_time = self._min_runtime - (el1+el2+el3)
+
             if sleep_time > 0:
                 self.debug(f"Sleeping for {sleep_time:.2f} additional seconds")
                 self._stop_event.wait(timeout=sleep_time)
 
-            self.debug(f"Stop event : {self._stop_event.is_set()}")
-
-        if self._in_q is not None:
-            self._in_q.close()
-
-        if len(self._out_qs) > 0:
-            for out_q in self._out_qs:
-                out_q.close()
-
         self.info(f"Quitting")
+
+        time.sleep(0.5)
+
         return
 
     @abstractmethod

@@ -128,11 +128,11 @@ class EdgineLogger(Process):
         """
 
         if self._log_dropped_msg_count[index] > 0:
-            self.output((INFO,
-                         self.name,
-                         f"Rate limiter dropped "
-                         f"{self._log_dropped_msg_count[index]} messages to"
-                         f"output {index} in the last second"))
+            self.output(INFO,
+                        self.name,
+                        f"Rate limiter dropped "
+                        f"{self._log_dropped_msg_count[index]} messages to"
+                        f"output {index} in the last second")
 
         self._log_dropped_msg_count[index] = 0
         self._log_last_limit_print[index] = time.time()
@@ -172,7 +172,7 @@ class EdgineLogger(Process):
         out_str = self.create_output_line(lvl, sender, msg)
 
         for i in range(len(self._out_qs)):
-            if sender not in self._cfg.log_rejection_list[i] and self._cfg.log_logging_lvl[i] <= lvl:
+            if sender not in self._cfg.log_rejection_list[i] and self._cfg.log_logging_lvl[i] >= lvl:
                 self.sent_out(i, out_str)
 
     def run(self) -> None:
@@ -180,12 +180,12 @@ class EdgineLogger(Process):
 
         stop_loop: bool = False
 
-        while not stop_loop:
+        while not stop_loop or not self._in_q.empty():
 
             self._cfg.update()
 
             try:
-                incoming_data: Dict = self._in_q.get_nowait()
+                incoming_data: Dict = self._in_q.get(timeout=0.005)
 
                 for level, [sender, msg] in incoming_data.items():
                     self.output(level, sender, msg)
