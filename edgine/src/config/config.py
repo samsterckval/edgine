@@ -2,6 +2,8 @@ from multiprocessing import Queue
 import queue
 from typing import List, Any
 import json
+from datetime import datetime
+from edgine.src.logger.cte import INFO, LOG, DEBUG, ERROR
 
 
 class Config:
@@ -13,10 +15,12 @@ class Config:
     """
 
     def __init__(self,
+                 logging_q: Queue = None,
                  in_q: Queue = None,
                  start_version: int = 0,
                  name: str = "None",
                  master: bool = False) -> None:
+        self._logging_q: Queue = logging_q
         self.changelist: List = []
         self._initialized: bool = False
         self._master: bool = master
@@ -27,6 +31,19 @@ class Config:
         self._unique_names.append("_unique_names")
         self.changelist: List = []
         self._initialized = True
+
+    def create_if_unknown(self, key, value) -> bool:
+        """
+        Checks if a key already exists, if not creates it with the value
+        :param key: key
+        :param value: value
+        :return: True if created
+        """
+        if not self.has_key(key) and self._master:
+            self.__setattr__(key, value)
+            return True
+        else:
+            return False
 
     def has_key(self, key: str) -> bool:
         """
@@ -46,11 +63,7 @@ class Config:
         """
         updated = False
 
-        # print("update called")
-
         if self._in_q is not None:
-
-            # print("queue found")
 
             c = 0
             while c < 1000:
@@ -60,16 +73,15 @@ class Config:
                     value = data[1]
                     if key not in self._unique_names:
                         self.__dict__[key] = value
-                        print(f"updated : {key}: {value}")
+                        self.info(f"updated : {key}: {value}")
                         updated = True
                     else:
-                        # print("unique name found, skipping")
+                        self.debug(f"Trying to update unique value {key}. Skipping.")
                         continue
                 except queue.Empty:
-                    # print("queue empty, bye")
                     break
                 except Exception as e:
-                    print(f"Unknown exception in Config.update : {e}")
+                    self.error(f"Unknown exception in Config.update : {e}")
                     return False
 
         return updated
@@ -113,3 +125,23 @@ class Config:
             out = json.dumps(self.__dict__, sort_keys=True)
 
         return out
+
+    def print(self, level: int, msg: str):
+        try:
+            self._logging_q.put_nowait({level: [self._name, msg]})
+        except Exception as e:
+            timestr: str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+            print(f"!!!({timestr}) [LOG_QUEUE_ERROR@{self.name}] {e} while "
+                  f"sending msg : {msg}")
+
+    def error(self, msg: str):
+        self.print(ERROR, msg)
+
+    def info(self, msg: str):
+        self.print(INFO, msg)
+
+    def debug(self, msg: str):
+        self.print(DEBUG, msg)
+
+    def log(self, msg: str):
+        self.print(LOG, msg)

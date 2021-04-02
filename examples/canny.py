@@ -1,6 +1,6 @@
 from edgine.src.config.config_server import ConfigServer
 from edgine.src.base import EdgineBase
-from edgine.src.logger import EdgineLogger
+from edgine.src.logger.edgine_logger import EdgineLogger
 from multiprocessing import Event, Queue
 from typing import List, Any
 import os
@@ -30,6 +30,23 @@ class Step1(EdgineBase):
         return out
 
 
+class Resizer(EdgineBase):
+
+    def __init__(self,
+                 config_server: ConfigServer,
+                 **kwargs):
+        EdgineBase.__init__(self,
+                            name="RES",
+                            config_server=config_server,
+                            **kwargs)
+        config_server.config.resize_target = (300, 300)
+        config_server.save_config()
+
+    def blogic(self, data_in: Any = None) -> Any:
+        res_img = None if data_in is None else cv2.resize(data_in, self._cfg.resize_target)
+        return res_img
+
+
 class Step2(EdgineBase):
 
     def __init__(self,
@@ -39,7 +56,7 @@ class Step2(EdgineBase):
                             **kwargs)
 
     def blogic(self, data_in: Any = None) -> Any:
-        edges = cv2.Canny(data_in, 100, 200, 50)
+        edges = cv2.Canny(data_in, 100, 200)
         return edges
 
 
@@ -64,13 +81,15 @@ if __name__ == "__main__":
     log_q = Queue()
     q1 = Queue()
     q2 = Queue()
-    cs = ConfigServer(stop_event=global_stop, config_file="canny_config.json", name="CS")
+    q3 = Queue()
+    cs = ConfigServer(stop_event=global_stop, config_file="canny_config.json", name="CS", logging_q=log_q)
     logger = EdgineLogger(stop_event=global_stop, config_server=cs, in_q=log_q, out_qs=[])
     step1 = Step1(stop_event=global_stop, logging_q=log_q, config_server=cs, out_qs=[q1], min_runtime=1)
-    step2 = Step2(stop_event=global_stop, logging_q=log_q, config_server=cs, in_q=q1, out_qs=[q2], min_runtime=1)
+    resizer = Resizer(stop_event=global_stop, logging_q=log_q, config_server=cs, in_q=q1, out_qs=[q2], min_runtime=0.1)
+    step2 = Step2(stop_event=global_stop, logging_q=log_q, config_server=cs, in_q=q2, out_qs=[q3], min_runtime=1)
     randomPrint = PrintRandom(stop_event=global_stop, logging_q=log_q, config_server=cs, min_runtime=10)
 
-    services = [cs, step1, step2, randomPrint, logger]
+    services = [cs, step1, resizer, step2, randomPrint, logger]
 
     print(f"Starting {len(services)} services:")
 
@@ -82,12 +101,12 @@ if __name__ == "__main__":
 
     while True:
         try:
-            img = q2.get(timeout=0.5)
+            img = q3.get(timeout=0.5)
         except Exception:
             pass
 
         cv2.imshow('frame', img)
-        if cv2.waitKey(1000) & 0xFF == ord('q'):
+        if cv2.waitKey(33) & 0xFF == ord('q'):
             global_stop.set()
             break
 

@@ -1,0 +1,5 @@
+LOGGING_LEVELS = ['ERR', 'LOG', 'INF', 'DEB']
+ERROR = 0
+LOG = 1
+INFO = 2
+DEBUG = 3

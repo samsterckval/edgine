@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from edgine.src.config.config_server import ConfigServer
 from edgine.src.config.config import Config
-from edgine.src.logger import ERROR, INFO, DEBUG, LOG
+from edgine.src.logger.cte import ERROR, INFO, DEBUG, LOG
 import time
 import queue
 
@@ -111,7 +111,6 @@ class EdgineBase(Process, ABC):
             sleep_time = self._min_runtime - (el1+el2+el3)
 
             if sleep_time > 0:
-                self.debug(f"Sleeping for {sleep_time:.2f} additional seconds")
                 self._stop_event.wait(timeout=sleep_time)
 
         self.info(f"Quitting")
@@ -130,7 +129,7 @@ class EdgineBase(Process, ABC):
             self._logging_q.put_nowait({level: [self._name, msg]})
         except Exception as e:
             timestr: str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-            print(f"!!!({timestr}) [LOG_QUEUE_ERROR] {e} while "
+            print(f"!!!({timestr}) [LOG_QUEUE_ERROR@{self.name}] {e} while "
                   f"sending msg : {msg}")
 
     def error(self, msg: str):
