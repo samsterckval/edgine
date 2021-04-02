@@ -39,7 +39,8 @@ class TestEdgine(unittest.TestCase):
     def test_003_config_update_good(self):
         """Test is child config updates from queue"""
         q = Queue()
-        config = Config(in_q=q)
+        fake_log_q = Queue()
+        config = Config(in_q=q, logging_q=fake_log_q)
         q.put_nowait(["test_name", "test_value"])
         time.sleep(0.1)
         config.update()
@@ -49,7 +50,8 @@ class TestEdgine(unittest.TestCase):
     def test_004_configserver(self):
         """Test if children get updated from config master"""
         fake_stop = Event()
-        cs = ConfigServer(stop_event=fake_stop, name="test-cs")
+        fake_log_q = Queue()
+        cs = ConfigServer(stop_event=fake_stop, name="test-cs", logging_q=fake_log_q)
         config = cs.get_config_copy()
         cs.config.test_004 = "configserver"
         cs.start()
@@ -62,8 +64,9 @@ class TestEdgine(unittest.TestCase):
     def test_005_saveconfig(self):
         """Test if a new config can be loaded from a file"""
         fake_stop = Event()
-        cs = ConfigServer(stop_event=fake_stop, name="test-cs", config_file="config.json")
+        fake_log_q = Queue()
+        cs = ConfigServer(stop_event=fake_stop, name="test-cs", config_file="config.json", logging_q=fake_log_q)
         cs.config.test_005 = "saveconfig"
         cs.save_config()
-        cs2 = ConfigServer(stop_event=fake_stop, name="test-cs2", config_file="config.json")
+        cs2 = ConfigServer(stop_event=fake_stop, name="test-cs2", config_file="config.json", logging_q=fake_log_q)
         assert(cs2.config.test_005 == cs.config.test_005)
