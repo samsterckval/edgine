@@ -50,7 +50,7 @@ class ConfigServer(Process):
 
             self._stop_event.wait(timeout=1)
 
-        self.info("quitting ConfigServer")
+        self.info("Quitting")
 
     def save_config(self) -> bool:
         """

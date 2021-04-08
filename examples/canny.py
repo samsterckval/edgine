@@ -1,6 +1,7 @@
 from edgine.src.config.config_server import ConfigServer
 from edgine.src.base import EdgineBase
 from edgine.src.logger.edgine_logger import EdgineLogger
+from edgine.src.starter import EdgineStarter
 from multiprocessing import Event, Queue
 from typing import List, Any
 import os
@@ -8,21 +9,24 @@ import cv2
 import numpy as np
 import random
 import string
+import time
 
 
-class Step1(EdgineBase):
+class Getter(EdgineBase):
 
     def __init__(self,
                  **kwargs):
         EdgineBase.__init__(self,
-                            name="STP1",
+                            name="GET",
                             **kwargs)
 
         self._images_list: List = os.listdir(os.path.join(os.getcwd(), "images"))
+        self.info(f"Found {len(self._images_list)} images")
         self._img_pointer: int = 0
 
     def blogic(self, data_in: Any = None) -> Any:
         path = os.path.join(os.getcwd(), "images", self._images_list[self._img_pointer])
+        self.debug(f"got img {self._img_pointer}")
         out = cv2.imread(path)
         self._img_pointer += 1
         if self._img_pointer >= len(self._images_list):
@@ -39,20 +43,20 @@ class Resizer(EdgineBase):
                             name="RES",
                             config_server=config_server,
                             **kwargs)
-        config_server.config.resize_target = (300, 300)
+        config_server.config.create_if_unknown("resize_target", (300, 300))
         config_server.save_config()
 
     def blogic(self, data_in: Any = None) -> Any:
-        res_img = None if data_in is None else cv2.resize(data_in, self._cfg.resize_target)
+        res_img = None if data_in is None else cv2.resize(data_in, tuple(self._cfg.resize_target))
         return res_img
 
 
-class Step2(EdgineBase):
+class Canny(EdgineBase):
 
     def __init__(self,
                  **kwargs):
         EdgineBase.__init__(self,
-                            name="STP2",
+                            name="CANN",
                             **kwargs)
 
     def blogic(self, data_in: Any = None) -> Any:
@@ -77,27 +81,18 @@ class PrintRandom(EdgineBase):
 
 if __name__ == "__main__":
     print("Canny edge detection example")
-    global_stop = Event()
-    log_q = Queue()
-    q1 = Queue()
-    q2 = Queue()
-    q3 = Queue()
-    cs = ConfigServer(stop_event=global_stop, config_file="canny_config.json", name="CS", logging_q=log_q)
-    logger = EdgineLogger(stop_event=global_stop, config_server=cs, in_q=log_q, out_qs=[])
-    step1 = Step1(stop_event=global_stop, logging_q=log_q, config_server=cs, out_qs=[q1], min_runtime=1)
-    resizer = Resizer(stop_event=global_stop, logging_q=log_q, config_server=cs, in_q=q1, out_qs=[q2], min_runtime=0.1)
-    step2 = Step2(stop_event=global_stop, logging_q=log_q, config_server=cs, in_q=q2, out_qs=[q3], min_runtime=1)
-    randomPrint = PrintRandom(stop_event=global_stop, logging_q=log_q, config_server=cs, min_runtime=10)
+    starter = EdgineStarter(config_file="canny_config.json")
+    starter.reg_service(Getter, min_runtime=1)
+    starter.reg_service(Resizer)
+    starter.reg_service(Canny)
+    starter.reg_service(PrintRandom, min_runtime=10)
+    starter.reg_connection(0, 1)
+    starter.reg_connection(1, 2)
+    q3 = starter.reg_sink(2)
+    starter.init_services()
+    starter.start()
 
-    services = [cs, step1, resizer, step2, randomPrint, logger]
-
-    print(f"Starting {len(services)} services:")
-
-    for service in services:
-        print(f" | - {service.name}")
-        service.start()
-
-    img = np.random.randint(255, size=(200, 200, 3), dtype=np.uint8)
+    img = np.random.randint(255, size=(300, 300, 3), dtype=np.uint8)
 
     while True:
         try:
@@ -106,17 +101,10 @@ if __name__ == "__main__":
             pass
 
         cv2.imshow('frame', img)
-        if cv2.waitKey(33) & 0xFF == ord('q'):
-            global_stop.set()
+        if cv2.waitKey(66) & 0xFF == ord('q'):
+            starter.stop()
             break
 
     cv2.destroyAllWindows()
-    for service in services:
-        service.join(timeout=2)
-
-    for service in services:
-        if service.is_alive():
-            service.terminate()
-            print(f"Service {service.name} has been terminated")
 
     print("All done!")

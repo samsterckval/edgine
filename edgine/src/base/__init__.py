@@ -1,4 +1,6 @@
-from multiprocessing import Queue, Process, Event
+from multiprocessing import Queue, Process, Event, Array
+from multiprocessing.queues import Queue as Q
+from ctypes import c_int8
 from typing import Any, List
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -16,21 +18,21 @@ class EdgineBase(Process, ABC):
                  stop_event: Event,
                  config_server: ConfigServer,
                  logging_q: Queue,
-                 in_q: Queue = None,
-                 out_qs: List[Queue] = None,
-                 min_runtime: float = 0.01,
+                 data_in: Queue = None,
+                 data_out_list: List[Queue] = None,
+                 min_runtime: float = 0.001,
                  **kwargs):
         Process.__init__(self, name=name)
         self._stop_event: Event = stop_event
 
-        if out_qs is None:
-            out_qs = []
+        if data_out_list is None:
+            data_out_list = []
 
         self._cfg: Config = config_server.get_config_copy()
         self._name: str = name
         self._logging_q: Queue = logging_q
-        self._in_q: Queue = in_q
-        self._out_qs: List[Queue] = out_qs
+        self._data_in: Queue = data_in
+        self._data_out_list: List[Queue] = data_out_list
         self._min_runtime: float = min_runtime
         self._blogic_time: float = 0.005
         self._get_time: float = 0.005
@@ -49,11 +51,11 @@ class EdgineBase(Process, ABC):
         Get data from input Q
         :return: The data from the input Q
         """
-        if self._in_q is None:
+        if self._data_in is None:
             return None
 
         try:
-            data = self._in_q.get(timeout=self._min_runtime/2.0)
+            data = self._data_in.get(timeout=self._min_runtime / 2.0)
             self.debug(f"Data found of type {type(data)}")
             return data
         except queue.Empty:
@@ -71,8 +73,8 @@ class EdgineBase(Process, ABC):
             return True
 
         try:
-            self.debug(f"Posting output to {len(self._out_qs)} queue{'s' if len(self._out_qs) > 1 else ''}")
-            for q in self._out_qs:
+            self.debug(f"Posting output to {len(self._data_out_list)} queue{'s' if len(self._data_out_list) > 1 else ''}")
+            for q in self._data_out_list:
                 q.put_nowait(data)
         except Exception as e:
             self.error(f"Unknown exception in post_to_qs : {e}")
@@ -86,23 +88,20 @@ class EdgineBase(Process, ABC):
         while not self._stop_event.is_set():
             self._cfg.update()
             s = time.time()
-            if self._in_q is not None:
-                data = self.get_from_q()
-            else:
-                data = None
-
+            data = self.get_from_q() if self._data_in is not None else None
             e = time.time()
             el1 = e-s
             self._get_time = 0.8*self._get_time + 0.2*el1
 
             s = time.time()
-            out = self.blogic(data_in=data)
+            out = self.blogic(data_in=data) if data is not None or self._data_in is None else None
             e = time.time()
             el2 = e-s
             self._blogic_time = 0.8*self._blogic_time + 0.2*el2
 
             s = time.time()
-            self.post_to_qs(out)
+            if out is not None:
+                self.post_to_qs(out)
             e = time.time()
             el3 = e-s
             self._post_time = 0.8*self._post_time + 0.2*el3
@@ -113,11 +112,15 @@ class EdgineBase(Process, ABC):
             if sleep_time > 0:
                 self._stop_event.wait(timeout=sleep_time)
 
+        for q in self._data_out_list:
+            q.close()
+
+        if self._data_in is not None:
+            while not self._data_in.empty():
+                tmp = self._data_in.get_nowait()
+            self._data_in.close()
+
         self.info(f"Quitting")
-
-        time.sleep(0.5)
-
-        return
 
     @abstractmethod
     def blogic(self, data_in: Any = None) -> Any:
