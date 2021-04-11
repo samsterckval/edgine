@@ -74,8 +74,14 @@ class EdgineBase(Process, ABC):
 
         try:
             self.debug(f"Posting output to {len(self._data_out_list)} queue{'s' if len(self._data_out_list) > 1 else ''}")
+            posted = False
             for q in self._data_out_list:
-                q.put_nowait(data)
+                if not q.full():
+                    q.put_nowait(data)
+                    posted = True
+
+            # if not posted:
+            #     self._stop_event.wait(timeout=0.01)
         except Exception as e:
             self.error(f"Unknown exception in post_to_qs : {e}")
             return False
@@ -85,6 +91,9 @@ class EdgineBase(Process, ABC):
     def run(self) -> None:
         """Do stuff"""
         self.info("Hello")
+
+        self.prerun()
+
         while not self._stop_event.is_set():
             self._cfg.update()
             s = time.time()
@@ -121,6 +130,10 @@ class EdgineBase(Process, ABC):
             self._data_in.close()
 
         self.info(f"Quitting")
+
+    def prerun(self) -> None:
+        """This will be run before the main loop of the process, overwrite it to implement your own."""
+        return
 
     @abstractmethod
     def blogic(self, data_in: Any = None) -> Any:
