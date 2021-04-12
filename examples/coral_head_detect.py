@@ -144,7 +144,7 @@ def append_bboxs_to_img(cv2_im, bboxs):
 if __name__ == "__main__":
     print("Canny edge detection example")
     starter = EdgineStarter(config_file="coral_head_detect_config.json")
-    starter.reg_service(Getter)
+    starter.reg_service(Getter)  # {"type": "Getter", "file": "getter.py", "min_runtime": none}
     starter.reg_service(Resizer)
     starter.reg_service(Detect)
     starter.reg_service(PrintRandom, min_runtime=10)
