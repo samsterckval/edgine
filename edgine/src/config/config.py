@@ -3,7 +3,10 @@ import queue
 from typing import List, Any
 import json
 from datetime import datetime
+import time
 from edgine.src.logger.cte import INFO, LOG, DEBUG, ERROR
+
+CONFIG_UNIQUE_NAMES = ["_logging_q", "changelist", "_initialized", "_master", "_name", "_in_q", "_version", "_unique_names"]
 
 
 class Config:
@@ -72,6 +75,7 @@ class Config:
                     key = data[0]
                     value = data[1]
                     if key not in self._unique_names:
+                    # if key not in CONFIG_UNIQUE_NAMES:
                         self.__dict__[key] = value
                         self.info(f"updated : {key}: {value}")
                         updated = True

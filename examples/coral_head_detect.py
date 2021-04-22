@@ -46,11 +46,11 @@ class Resizer(EdgineBase):
                             name="RES",
                             config_server=config_server,
                             **kwargs)
-        config_server.config.create_if_unknown("resize_target", (320, 320))
+        config_server.create_if_unknown("resize_target", (320, 320))
         config_server.save_config()
 
     def blogic(self, data_in: Any = None) -> Any:
-        res_img = None if data_in is None else cv2.resize(data_in, tuple(self._cfg.resize_target))
+        res_img = None if data_in is None else cv2.resize(data_in, tuple(self.cfg.resize_target))
         return res_img
 
 
@@ -71,10 +71,10 @@ class Detect(EdgineBase):
                             name="DET",
                             config_server=config_server,
                             **kwargs)
-        config_server.config.create_if_unknown("detect_model_file",
-                                               "models/head_detector_v2_320x320_ssd_mobilenet_v2_quant_edgetpu.tflite")
-        config_server.config.create_if_unknown("top_k", 10)
-        config_server.config.create_if_unknown("min_score", 0.8)
+        config_server.create_if_unknown("detect_model_file",
+                                        "models/head_detector_v2_320x320_ssd_mobilenet_v2_quant_edgetpu.tflite")
+        config_server.create_if_unknown("top_k", 10)
+        config_server.create_if_unknown("min_score", 0.8)
         config_server.save_config()
 
         self._interpreter = None
@@ -83,7 +83,7 @@ class Detect(EdgineBase):
 
     def prerun(self) -> None:
         self._interpreter = tflite.Interpreter(
-            model_path=self._cfg.detect_model_file,
+            model_path=self.cfg.detect_model_file,
             experimental_delegates=[tflite.load_delegate(EDGETPU_SHARED_LIB,
                                                          {})])
         self._interpreter.allocate_tensors()
@@ -100,7 +100,7 @@ class Detect(EdgineBase):
         # run the inference
         self._interpreter.invoke()
 
-        count = min(int(self._interpreter.get_tensor(self._output_details[3]['index'])), self._cfg.top_k)
+        count = min(int(self._interpreter.get_tensor(self._output_details[3]['index'])), self.cfg.top_k)
         boxes = self._interpreter.get_tensor(self._output_details[0]['index'])[0][:count + 1]
         # class_ids = self._interpreter.get_tensor(self._output_details[1]['index'])[0][:count+1]
         scores = self._interpreter.get_tensor(self._output_details[2]['index'])[0][:count + 1]
@@ -111,7 +111,7 @@ class Detect(EdgineBase):
                        ymin=np.maximum(0.0, boxes[i][0]),
                        xmax=np.minimum(1.0, boxes[i][3]),
                        ymax=np.minimum(1.0, boxes[i][2]))
-                  for i in range(count) if scores[i] >= self._cfg.min_score]
+                  for i in range(count) if scores[i] >= self.cfg.min_score]
 
         return result
 

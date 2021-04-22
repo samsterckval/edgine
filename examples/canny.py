@@ -44,7 +44,7 @@ class Resizer(EdgineBase):
         config_server.save_config()
 
     def blogic(self, data_in: Any = None) -> Any:
-        res_img = None if data_in is None else cv2.resize(data_in, tuple(self._cfg.resize_target))
+        res_img = None if data_in is None else cv2.resize(data_in, tuple(self.cfg.resize_target))
         return res_img
 
 

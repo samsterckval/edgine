@@ -28,7 +28,7 @@ class EdgineBase(Process, ABC):
         if data_out_list is None:
             data_out_list = []
 
-        self._cfg: Config = config_server.get_config_copy()
+        self.cfg: Config = config_server.get_config_copy()
         self._name: str = name
         self._logging_q: Queue = logging_q
         self._data_in: Queue = data_in
@@ -92,10 +92,12 @@ class EdgineBase(Process, ABC):
         """Do stuff"""
         self.info("Hello")
 
+        self.cfg.update()
+
         self.prerun()
 
         while not self._stop_event.is_set():
-            self._cfg.update()
+            self.cfg.update()
             s = time.time()
             data = self.get_from_q() if self._data_in is not None else None
             e = time.time()

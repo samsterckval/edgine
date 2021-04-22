@@ -31,6 +31,15 @@ class ConfigServer(Process):
         self.load_config()
         self.save_config()
 
+    def create_if_unknown(self, key, value) -> bool:
+        """
+        Checks if a key already exists, if not creates it with the value
+        :param key: key
+        :param value: value
+        :return: True if created
+        """
+        return self.config.create_if_unknown(key, value)
+
     def get_clean_config_dict(self):
         config_dict = self.config.__dict__
         unique_names = config_dict['_unique_names']
