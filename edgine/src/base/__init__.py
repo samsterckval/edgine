@@ -131,10 +131,16 @@ class EdgineBase(Process, ABC):
                 tmp = self._data_in.get_nowait()
             self._data_in.close()
 
+        self.postrun()
+
         self.info(f"Quitting")
 
     def prerun(self) -> None:
         """This will be run before the main loop of the process, overwrite it to implement your own."""
+        return
+
+    def postrun(self) -> None:
+        """This will be run right before we exit the Process"""
         return
 
     @abstractmethod
