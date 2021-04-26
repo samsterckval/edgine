@@ -34,11 +34,12 @@ class EdgineStarter:
 
         return out
 
-    def reg_service(self, service_type, min_runtime: float = 0.001):
+    def reg_service(self, service_type, min_runtime: float = 0.001) -> int:
         new_q = Queue(maxsize=2)
         self._qs.append(new_q)
         self.min_runtimes.append(min_runtime)
         self.user_service_types.append(service_type)
+        return len(self.user_service_types) - 1
 
     def reg_connection(self, prod_id: int, cons_id: int, type: str = 'q'):
         self._connections.append((prod_id, cons_id))

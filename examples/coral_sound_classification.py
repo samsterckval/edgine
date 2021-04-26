@@ -8,7 +8,6 @@ import random
 import string
 import time
 import platform
-import collections
 import tflite_runtime.interpreter as tflite
 from matplotlib import pyplot as plt
 from matplotlib.backend_bases import KeyEvent
@@ -234,18 +233,22 @@ class PrintRandom(EdgineBase):
 
 if __name__ == "__main__":
     starter = EdgineStarter(config_file="coral_sound_classification_config.json")
-    starter.reg_service(Getter)
-    starter.reg_service(Combiner)
-    starter.reg_service(Normaliser)
-    starter.reg_service(FeatureExtractor, min_runtime=1)
-    starter.reg_service(Classify, min_runtime=1)
-    starter.reg_service(PrintRandom, min_runtime=10)
-    starter.reg_connection(0, 1)
-    starter.reg_connection(1, 2)
-    starter.reg_connection(2, 3)
-    starter.reg_connection(3, 4)
-    q3 = starter.reg_sink(2)
-    q4 = starter.reg_sink(4)
+
+    getter_id = starter.reg_service(Getter)
+    combiner_id = starter.reg_service(Combiner)
+    normaliser_id = starter.reg_service(Normaliser)
+    feature_id = starter.reg_service(FeatureExtractor, min_runtime=1)
+    classifier_id = starter.reg_service(Classify, min_runtime=1)
+    print_random_id = starter.reg_service(PrintRandom, min_runtime=10)
+
+    starter.reg_connection(getter_id, combiner_id)
+    starter.reg_connection(combiner_id, normaliser_id)
+    starter.reg_connection(normaliser_id, feature_id)
+    starter.reg_connection(feature_id, classifier_id)
+
+    q3 = starter.reg_sink(normaliser_id)
+    q4 = starter.reg_sink(classifier_id)
+
     starter.init_services()
     starter.start()
 
@@ -287,6 +290,6 @@ if __name__ == "__main__":
         plt.cla()
         plt.plot(bigger_sound_chunk)
         plt.title(pred_name)
-        plt.ylim([np.iinfo(np.int16).min, np.iinfo(np.int16).max])
+        plt.ylim([np.iinfo(np.int16).min-200, np.iinfo(np.int16).max+200])
         plt.connect('key_press_event', exit_all)
         plt.pause(0.001)
