@@ -13,6 +13,7 @@ import tflite_runtime.interpreter as tflite
 from matplotlib import pyplot as plt
 from matplotlib.backend_bases import KeyEvent
 import librosa
+import math
 
 EDGETPU_SHARED_LIB = {
     'Linux': 'libedgetpu.so.1',
@@ -46,13 +47,14 @@ class Getter(EdgineBase):
         self._cap: pyaudio.PyAudio = pyaudio.PyAudio()
         for i in range(self._cap.get_device_count()):
             if self._cap.get_device_info_by_index(i)["name"] == self.cfg.input_device_name:
+                self.log(f"Found device index {i}")
                 self.device_index = i
 
         if self.device_index is None:
             self.error(f"Device with name '{self.cfg.input_device_name}' not found. Using default")
             self.device_index = int(self._cap.get_default_input_device_info()["index"])
 
-        for k, v in self._cap.get_device_info_by_index(self.cfg.input_device_index).items():
+        for k, v in self._cap.get_device_info_by_index(self.device_index).items():
             self.info(f"{k: >25} : {v}")
 
         self._stream: pyaudio.Stream = self._cap.open(format=self.cfg.input_format,
@@ -84,23 +86,41 @@ class Combiner(EdgineBase):
                             config_server=config_server,
                             **kwargs)
         config_server.create_if_unknown("total_length", 4096)
+        time.sleep(1)
         self.pointer = 0
-        self.buffer = np.zeros((4096, ), dtype=np.int16)
+        self.buffer = np.zeros((self.cfg.total_length, ), dtype=np.int16)
         self.sending = False
 
     def blogic(self, data_in: Any = None) -> Any:
-        start = int(self.pointer*self.cfg.input_chunks)
-        end = int((self.pointer+1)*self.cfg.input_chunks)
-        self.buffer[start:end] = data_in
-        self.pointer += 1
-        maxp = int(self.cfg.total_length/self.cfg.input_chunks)
-        if self.pointer >= maxp:
-            self.sending = True
-            self.pointer = 0
-        if self.sending:
-            return self.buffer
-        else:
-            return None
+        maxp = math.floor(int(self.cfg.total_length/self.cfg.input_chunks))
+
+        curr = 1
+        while curr < maxp:
+            self.buffer[(curr-1)*self.cfg.input_chunks:curr*self.cfg.input_chunks] = self.buffer[(curr) * self.cfg.input_chunks:(curr + 1) * self.cfg.input_chunks]
+            curr += 1
+
+        self.buffer[-self.cfg.input_chunks:] = data_in[:]
+
+        return self.buffer
+
+    def postrun(self) -> None:
+        self.buffer = None
+        del self.buffer
+        return
+
+
+class Normaliser(EdgineBase):
+
+    def __init__(self,
+                 **kwargs):
+        EdgineBase.__init__(self,
+                            name="NORM",
+                            **kwargs)
+
+    def blogic(self, data_in: Any = None) -> Any:
+        data_out = data_in*(np.iinfo(np.int16).max/np.max(data_in))
+
+        return data_out
 
 
 class FeatureExtractor(EdgineBase):
@@ -161,6 +181,8 @@ class Classify(EdgineBase):
         self._input_details = None
         self._output_details = None
 
+        self.last_pred = None
+
     def prerun(self) -> None:
         self._interpreter = tflite.Interpreter(
             model_path=self.cfg.model_file,
@@ -174,6 +196,8 @@ class Classify(EdgineBase):
         # make it float32 data
         input_data = data_in.astype(np.float32)
 
+        # self.log(f"input_data : {input_data.shape}")
+
         # load data into the tensor
         self._interpreter.set_tensor(self._input_details[0]['index'], input_data)
 
@@ -182,7 +206,15 @@ class Classify(EdgineBase):
 
         tflite_model_predictions = self._interpreter.get_tensor(self._output_details[0]['index'])
 
-        return tflite_model_predictions
+        tmp = np.argmax(tflite_model_predictions[0])
+
+        print(tflite_model_predictions[0])
+
+        if tmp != self.last_pred:
+            self.last_pred = tmp
+            return tflite_model_predictions[0]
+        else:
+            return None
 
 
 class PrintRandom(EdgineBase):
@@ -201,19 +233,19 @@ class PrintRandom(EdgineBase):
 
 
 if __name__ == "__main__":
-    print("Canny edge detection example")
     starter = EdgineStarter(config_file="coral_sound_classification_config.json")
     starter.reg_service(Getter)
     starter.reg_service(Combiner)
-    starter.reg_service(FeatureExtractor)
-    starter.reg_service(Classify)
-    # min_runtime=1024 / 44100)  # {"type": "Getter", "file": "getter.py", "min_runtime": none}
+    starter.reg_service(Normaliser)
+    starter.reg_service(FeatureExtractor, min_runtime=1)
+    starter.reg_service(Classify, min_runtime=1)
     starter.reg_service(PrintRandom, min_runtime=10)
     starter.reg_connection(0, 1)
     starter.reg_connection(1, 2)
     starter.reg_connection(2, 3)
-    q3 = starter.reg_sink(0)
-    q4 = starter.reg_sink(3)
+    starter.reg_connection(3, 4)
+    q3 = starter.reg_sink(2)
+    q4 = starter.reg_sink(4)
     starter.init_services()
     starter.start()
 
@@ -232,17 +264,14 @@ if __name__ == "__main__":
             exit(code=0)
 
 
-    bigger_sound_chunk = np.zeros(shape=(4096,), dtype=np.int16)
+    bigger_sound_chunk = np.zeros(shape=(8192,), dtype=np.int16)
     pointer = 0
+
+    pred_name = "Nothing"
 
     while True:
         try:
-            sound_chunk = q3.get_nowait()
-
-            bigger_sound_chunk[2048:3072] = bigger_sound_chunk[3072:4096]
-            bigger_sound_chunk[1024:2048] = bigger_sound_chunk[2048:3072]
-            bigger_sound_chunk[:1024] = bigger_sound_chunk[1024:2048]
-            bigger_sound_chunk[3072:4096] = sound_chunk
+            bigger_sound_chunk = q3.get_nowait()
 
         except Exception:
             pass
@@ -250,13 +279,14 @@ if __name__ == "__main__":
         try:
             pred = q4.get_nowait()
 
-            print(content_list[np.argmax(pred)])
+            pred_name = content_list[np.argmax(pred)]
 
         except Exception:
             pass
 
         plt.cla()
         plt.plot(bigger_sound_chunk)
+        plt.title(pred_name)
         plt.ylim([np.iinfo(np.int16).min, np.iinfo(np.int16).max])
         plt.connect('key_press_event', exit_all)
         plt.pause(0.001)
