@@ -35,7 +35,6 @@ class Getter(EdgineBase):
         config_server.create_if_unknown("input_chunks", 1024)
         config_server.create_if_unknown("input_format", pyaudio.paInt16)
         config_server.create_if_unknown("input_sample_rate", 44100)
-        config_server.create_if_unknown("input_channels", 1)
         config_server.save_config()
 
         self._cap = None
@@ -86,15 +85,13 @@ class Combiner(EdgineBase):
                             **kwargs)
         config_server.create_if_unknown("total_length", 4096)
         time.sleep(1)
-        self.pointer = 0
         self.buffer = np.zeros((self.cfg.total_length, ), dtype=np.int16)
-        self.sending = False
+        self.maxp = math.floor(int(self.cfg.total_length/self.cfg.input_chunks))
 
     def blogic(self, data_in: Any = None) -> Any:
-        maxp = math.floor(int(self.cfg.total_length/self.cfg.input_chunks))
 
         curr = 1
-        while curr < maxp:
+        while curr < self.maxp:
             self.buffer[(curr-1)*self.cfg.input_chunks:curr*self.cfg.input_chunks] = self.buffer[(curr) * self.cfg.input_chunks:(curr + 1) * self.cfg.input_chunks]
             curr += 1
 
