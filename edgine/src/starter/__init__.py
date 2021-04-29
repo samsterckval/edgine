@@ -7,6 +7,7 @@ from multiprocessing import Queue, Event
 class EdgineStarter:
 
     def __init__(self, config_file: str = "cfg.json"):
+        print(ART)
         self.user_service_types: List = []
         self._user_services: List = []
         self._connections: List[tuple] = []
@@ -44,7 +45,10 @@ class EdgineStarter:
         self.user_service_types.append(service_type)
         return len(self.user_service_types) - 1
 
-    def reg_connection(self, prod_id: int, cons_id: int, type: str = 'q'):
+    def reg_connection(self, prod_id: int, cons_id: int):
+        if self._has_connection(cons_id):
+            raise ValueError(f"Consumer with ID {cons_id} [{type(self.user_service_types[cons_id])}] already has a primary connection")
+
         self._connections.append((prod_id, cons_id))
 
     def reg_secondary_connection(self, prod_id: int, cons_id: int):
@@ -112,3 +116,19 @@ class EdgineStarter:
         if self.logger.exitcode is None:
             print(f"Logger {self.logger.name} did not exit properly. Terminating...")
             self.logger.terminate()
+
+
+ART = """      &%%%%%%%%%%%%%%&                    /%&*                     &%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+      &%%%&                               /%%%&                  %%%%%.
+      &%%%@                      ,#@@@/   /%%%&        ,&@@@@( %%%%%.             .#@@@@%,           .#@@@@&,
+      &%%%@                  .%%%%%%%%%%%%%%%%&     &%%%%%%%%%%%%%,            &%%%%%&&%%%%&.     &%%%%%%%%%%%%&
+      &%%%%%%%%%%%%%%%%%/   #%%%%/      /%%%%%&   #%%%%.      %%%%&   *%&,    *%%%#             #%%%&.       &%%%*
+      &%%%&.............   .%%%&          &%%%&   %%%&         #%%%/  *%%%%    @%%%%%%&@@/     .%%%%%%%%%%%%%%%%%&
+      &%%%@                .%%%&          &%%%&   %%%%.        &%%%*  *%%%%       *#&&&%%%%%&  .%%%%&@@@@@@@@@@@@@
+      &%%%@                 %%%%%,      .%%%%%&   *%%%%&     /%%%%#   *%%%%    .*        #%%%(  &%%%&
+      &%%%%%%%%%%%%%%%%%@    .%%%%%%%%%%%%&%%%&     %%%%%%%%%%%&      *%%%%   @%%%%%%@@%%%%%&    .%%%%%%%%%%%%%%/
+      ###################        (&&&&&(  .###(          ...(&%%%%%   ,###(      (&&%%%%&%,          (%&&&&&%*
+                                                               &%%%*
+       .%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*        &%%%,
+                                                   &%%%%&%%%&%%%%%*
+                                                     ,&%%%%%%%%#"""

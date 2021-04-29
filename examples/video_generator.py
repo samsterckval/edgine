@@ -1,7 +1,7 @@
 from edgine.src.config.config_server import ConfigServer
 from edgine.src.base import EdgineBase
 from edgine.src.starter import EdgineStarter
-from typing import Any
+from typing import Any, List
 import cv2
 import numpy as np
 import time
@@ -10,12 +10,21 @@ import collections
 import tflite_runtime.interpreter as tflite
 import socket
 import imagezmq
+import random
+import zmq
 
 EDGETPU_SHARED_LIB = {
     'Linux': 'libedgetpu.so.1',
     'Darwin': 'libedgetpu.1.dylib',
     'Windows': 'edgetpu.dll'
 }[platform.system()]
+
+
+class HeadMeasurement:
+
+    def __init__(self, img: np.ndarray, temperature: float):
+        self.img: np.ndarray = img
+        self.temperature: float = temperature
 
 
 class Getter(EdgineBase):
@@ -119,6 +128,84 @@ class Detect(EdgineBase):
         del self._interpreter
 
 
+class HeadCropper(EdgineBase):
+
+    def __init__(self,
+                 **kwargs):
+        EdgineBase.__init__(self,
+                            name="CROP",
+                            **kwargs)
+
+    def blogic(self, data_in: Any = None) -> Any:
+
+        height, width, channels = data_in.shape
+
+        head_map = []
+
+        if self.secondary_data[0] is not None:
+            bboxs = self.secondary_data[0]
+
+            for bbox in bboxs:
+                x0, y0, x1, y1 = list(bbox)
+                x0, y0, x1, y1 = int(x0 * width), int(y0 * height), int(x1 * width), int(y1 * height)
+                crop = data_in[y0:y1, x0:x1]
+                crop = cv2.resize(crop, (100, 100))
+                head_map.append(HeadMeasurement(crop, random.randint(0, 200)))
+
+        return head_map
+
+
+class ExposeLastFail(EdgineBase):
+
+    def __init__(self,
+                 config_server: ConfigServer,
+                 **kwargs):
+        EdgineBase.__init__(self,
+                            name="LSTFAIL",
+                            config_server=config_server,
+                            **kwargs)
+        self.last_fail = None
+        self.last_measure = None
+        self.context = None
+        self.socket_measure = None
+        self.socket_fail = None
+        config_server.create_if_unknown("last_measure_port", 2233)
+        config_server.create_if_unknown("last_fail_port", 2234)
+        config_server.save_config()
+
+    def prerun(self) -> None:
+        self.context = zmq.Context()
+        self.socket_measure = self.context.socket(zmq.PUB)
+        self.socket_fail = self.context.socket(zmq.PUB)
+        measure_connect = f"tcp://*:{self.cfg.last_measure_port}"
+        fail_connect = f"tcp://*:{self.cfg.last_fail_port}"
+        self.info(measure_connect)
+        self.info(fail_connect)
+        self.socket_measure.bind(measure_connect)
+        self.socket_fail.bind(fail_connect)
+
+    def blogic(self, data_in: List[HeadMeasurement] = None) -> Any:
+        if not data_in:
+            return None
+
+        failchange = False
+
+        for head in data_in:
+            self.last_measure = head
+            if head.temperature == 78:
+                self.last_fail = head
+                failchange = True
+                self.log(f"FAIL! -- Temperature : {head.temperature}ºC")
+
+        if self.last_measure is not None:
+            self.socket_measure.send_pyobj(self.last_measure.img)
+
+        if self.last_fail is not None and failchange:
+            self.socket_fail.send_pyobj(self.last_fail.img)
+
+        return None
+
+
 class Drawer(EdgineBase):
 
     def __init__(self,
@@ -147,7 +234,7 @@ class ExposeVideo(EdgineBase):
                  config_server: ConfigServer,
                  **kwargs):
         EdgineBase.__init__(self,
-                            name="EXPOSER",
+                            name="VIDEXP",
                             config_server=config_server,
                             **kwargs)
         config_server.create_if_unknown("video_port", 3456)
@@ -158,7 +245,7 @@ class ExposeVideo(EdgineBase):
 
     def prerun(self) -> None:
         connect_to = f"tcp://*:{self.cfg.video_port}"
-        self.sender = imagezmq.ImageSender(connect_to=connect_to, REQ_REP=False)
+        self.sender: imagezmq.ImageSender = imagezmq.ImageSender(connect_to=connect_to, REQ_REP=False)
 
     def blogic(self, data_in: Any = None) -> Any:
         self.sender.send_image(self.device_name, data_in)
@@ -183,14 +270,19 @@ if __name__ == "__main__":
     resizer_id = starter.reg_service(Resizer)
     detect_id = starter.reg_service(Detect)
     drawer_id = starter.reg_service(Drawer)
-    exposer_id = starter.reg_service(ExposeVideo)
+    video_exposer_id = starter.reg_service(ExposeVideo)
+    cropper_id = starter.reg_service(HeadCropper)
+    fail_exposer_id = starter.reg_service(ExposeLastFail)
 
     starter.reg_connection(getter_id, resizer_id)
     starter.reg_connection(resizer_id, detect_id)
     starter.reg_connection(getter_id, drawer_id)
-    starter.reg_connection(drawer_id, exposer_id)
+    starter.reg_connection(getter_id, cropper_id)
+    starter.reg_connection(drawer_id, video_exposer_id)
+    starter.reg_connection(cropper_id, fail_exposer_id)
 
     starter.reg_secondary_connection(detect_id, drawer_id)
+    starter.reg_secondary_connection(detect_id, cropper_id)
 
     q3 = starter.reg_sink(drawer_id)
 
@@ -204,11 +296,22 @@ if __name__ == "__main__":
 
     last_bboxs = []
 
+    # context = zmq.Context()
+    # socket_fail = context.socket(zmq.SUB)
+    # socket_fail.connect("tcp://localhost:2233")
+    # socket_fail.subscribe("")
+
     while True:
         try:
             img = q3.get(timeout=0.5)
         except Exception:
             continue
+
+        # print("receiving fail")
+        # im = socket_fail.recv_pyobj()
+        #
+        # # im = np.reshape(im, (100, 100, 3))
+        # print(f"got fail : {im.shape}")
 
         cv2.putText(img,
                     text=f"{fps:.1f}FPS",
