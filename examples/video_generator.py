@@ -294,24 +294,11 @@ if __name__ == "__main__":
     s = time.time()
     fps = 30.0
 
-    last_bboxs = []
-
-    # context = zmq.Context()
-    # socket_fail = context.socket(zmq.SUB)
-    # socket_fail.connect("tcp://localhost:2233")
-    # socket_fail.subscribe("")
-
     while True:
         try:
             img = q3.get(timeout=0.5)
         except Exception:
             continue
-
-        # print("receiving fail")
-        # im = socket_fail.recv_pyobj()
-        #
-        # # im = np.reshape(im, (100, 100, 3))
-        # print(f"got fail : {im.shape}")
 
         cv2.putText(img,
                     text=f"{fps:.1f}FPS",
