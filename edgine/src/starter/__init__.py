@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 from edgine.src.config.config_server import ConfigServer
 from edgine.src.logger.edgine_logger import EdgineLogger
 from multiprocessing import Queue, Event
@@ -14,6 +14,8 @@ class EdgineStarter:
         self._sink_qs: List[Queue] = []
         self._sink_prod_ids: List[int] = []
         self.min_runtimes: List[float] = []
+        self.secondary_connections: List[Tuple] = []
+        self.secondary_qs: List[Queue] = []
         self.logging_q: Queue = Queue()
         self.global_stop: Event = Event()
         self._log_stop: Event = Event()
@@ -35,6 +37,7 @@ class EdgineStarter:
         return out
 
     def reg_service(self, service_type, min_runtime: float = 0.001) -> int:
+        """ Registers a new service """
         new_q = Queue(maxsize=2)
         self._qs.append(new_q)
         self.min_runtimes.append(min_runtime)
@@ -43,6 +46,12 @@ class EdgineStarter:
 
     def reg_connection(self, prod_id: int, cons_id: int, type: str = 'q'):
         self._connections.append((prod_id, cons_id))
+
+    def reg_secondary_connection(self, prod_id: int, cons_id: int):
+        """ Creates a secondary data connection """
+        self.secondary_connections.append((prod_id, cons_id))
+        new_q = Queue(maxsize=2)
+        self.secondary_qs.append(new_q)
 
     def reg_sink(self, prod_id: int) -> Queue:
         new_q = Queue(maxsize=2)
@@ -66,11 +75,19 @@ class EdgineStarter:
                 if self._sink_prod_ids[j] == i:
                     out_qs.append(self._sink_qs[j])
 
+            tmp_second_q = []
+            for j in range(len(self.secondary_connections)):
+                if self.secondary_connections[j][1] == i:
+                    tmp_second_q.append(self.secondary_qs[j])
+                elif self.secondary_connections[j][0] == i:
+                    out_qs.append(self.secondary_qs[j])
+
             service = self.user_service_types[i](stop_event=self.global_stop,
                                                  logging_q=self.logging_q,
                                                  config_server=self.config_server,
                                                  data_in=in_q,
                                                  data_out_list=out_qs,
+                                                 secondary_data_in_list=tmp_second_q,
                                                  min_runtime=self.min_runtimes[i])
 
             self._user_services.append(service)

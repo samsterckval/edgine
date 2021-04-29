@@ -19,6 +19,7 @@ class EdgineBase(Process, ABC):
                  config_server: ConfigServer,
                  logging_q: Queue,
                  data_in: Queue = None,
+                 secondary_data_in_list: List[Queue] = None,
                  data_out_list: List[Queue] = None,
                  min_runtime: float = 0.001,
                  **kwargs):
@@ -32,10 +33,13 @@ class EdgineBase(Process, ABC):
         self._name: str = name
         self._logging_q: Queue = logging_q
         self._data_in: Queue = data_in
+        self._secondary_data_in: List[Queue] = secondary_data_in_list
+        self.secondary_data: List[Any] = [None] * len(self._secondary_data_in)
         self._data_out_list: List[Queue] = data_out_list
         self._min_runtime: float = min_runtime
         self._blogic_time: float = 0.005
         self._get_time: float = 0.005
+        self._second_get_time: float = 0.005
         self._post_time: float = 0.005
 
     @property
@@ -45,6 +49,12 @@ class EdgineBase(Process, ABC):
     @name.setter
     def name(self, value: str) -> None:
         self._name = value
+
+    def update_secondary_data(self) -> None:
+        """Update the secondary input data"""
+        for i in range(len(self._secondary_data_in)):
+            if not self._secondary_data_in[i].empty():
+                self.secondary_data[i] = self._secondary_data_in[i].get_nowait()
 
     def get_from_q(self) -> Any:
         """
@@ -105,20 +115,26 @@ class EdgineBase(Process, ABC):
             self._get_time = 0.8*self._get_time + 0.2*el1
 
             s = time.time()
-            out = self.blogic(data_in=data) if data is not None or self._data_in is None else None
+            self.update_secondary_data()
             e = time.time()
             el2 = e-s
-            self._blogic_time = 0.8*self._blogic_time + 0.2*el2
+            self._second_get_time = 0.8*self._second_get_time + 0.2*el2
+
+            s = time.time()
+            out = self.blogic(data_in=data) if data is not None or self._data_in is None else None
+            e = time.time()
+            el3 = e-s
+            self._blogic_time = 0.8*self._blogic_time + 0.2*el3
 
             s = time.time()
             if out is not None:
                 self.post_to_qs(out)
             e = time.time()
-            el3 = e-s
-            self._post_time = 0.8*self._post_time + 0.2*el3
+            el4 = e-s
+            self._post_time = 0.8*self._post_time + 0.2*el4
 
             # Do we need to sleep?
-            sleep_time = self._min_runtime - (el1+el2+el3)
+            sleep_time = self._min_runtime - (el1+el2+el3+el4)
 
             if sleep_time > 0:
                 self._stop_event.wait(timeout=sleep_time)
