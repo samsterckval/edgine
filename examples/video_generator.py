@@ -86,7 +86,7 @@ class Detect(EdgineBase):
         config_server.create_if_unknown("min_score", 0.8)
         config_server.save_config()
 
-        self._interpreterq = None
+        self._interpreter = None
         self._input_details = None
         self._output_details = None
 
@@ -266,7 +266,7 @@ if __name__ == "__main__":
     print("Video generator with edge detection example")
     starter = EdgineStarter(config_file="coral_video_generator_config.json")
 
-    getter_id = starter.reg_service(Getter)  # {"type": "Getter", "file": "getter.py", "min_runtime": none}
+    getter_id = starter.reg_service(Getter, min_runtime=0.033)  # {"type": "Getter", "file": "getter.py", "min_runtime": none}
     resizer_id = starter.reg_service(Resizer)
     detect_id = starter.reg_service(Detect)
     drawer_id = starter.reg_service(Drawer)
@@ -284,47 +284,48 @@ if __name__ == "__main__":
     starter.reg_secondary_connection(detect_id, drawer_id)
     starter.reg_secondary_connection(detect_id, cropper_id)
 
-    q3 = starter.reg_sink(drawer_id)
+    # q3 = starter.reg_sink(drawer_id)
 
     starter.init_services()
     starter.start()
 
-    img = np.random.randint(255, size=(300, 300, 3), dtype=np.uint8)
-
-    s = time.time()
-    fps = 30.0
+    # img = np.random.randint(255, size=(300, 300, 3), dtype=np.uint8)
+    #
+    # s = time.time()
+    # fps = 30.0
 
     while True:
-        try:
-            img = q3.get(timeout=0.5)
-        except Exception:
-            continue
-
-        cv2.putText(img,
-                    text=f"{fps:.1f}FPS",
-                    fontFace=cv2.FONT_HERSHEY_DUPLEX,
-                    color=(255, 255, 255),
-                    thickness=1,
-                    fontScale=0.5,
-                    org=(10, 20))
-
-        cv2.putText(img,
-                    text="Press q to quit",
-                    fontFace=cv2.FONT_HERSHEY_DUPLEX,
-                    color=(255, 255, 255),
-                    thickness=1,
-                    fontScale=0.5,
-                    org=(10, 40))
-
-        cv2.imshow('frame', img)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            starter.stop()
-            break
-
-        e = time.time()
-        el = e - s
-        s = time.time()
-        fps = 0.8 * fps + 0.2 * (1.0 / el)
+        # try:
+        #     img = q3.get(timeout=0.5)
+        # except Exception:
+        #     continue
+        #
+        # cv2.putText(img,
+        #             text=f"{fps:.1f}FPS",
+        #             fontFace=cv2.FONT_HERSHEY_DUPLEX,
+        #             color=(255, 255, 255),
+        #             thickness=1,
+        #             fontScale=0.5,
+        #             org=(10, 20))
+        #
+        # cv2.putText(img,
+        #             text="Press q to quit",
+        #             fontFace=cv2.FONT_HERSHEY_DUPLEX,
+        #             color=(255, 255, 255),
+        #             thickness=1,
+        #             fontScale=0.5,
+        #             org=(10, 40))
+        #
+        # cv2.imshow('frame', img)
+        # if cv2.waitKey(33) & 0xFF == ord('q'):
+        #     starter.stop()
+        #     break
+        #
+        # e = time.time()
+        # el = e - s
+        # s = time.time()
+        # fps = 0.8 * fps + 0.2 * (1.0 / el)
+        time.sleep(1)
 
     cv2.destroyAllWindows()
 
