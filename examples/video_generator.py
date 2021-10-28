@@ -267,12 +267,12 @@ if __name__ == "__main__":
     starter = EdgineStarter(config_file="coral_video_generator_config.json")
 
     getter_id = starter.reg_service(Getter, min_runtime=0.033)  # {"type": "Getter", "file": "getter.py", "min_runtime": none}
-    resizer_id = starter.reg_service(Resizer)
-    detect_id = starter.reg_service(Detect)
-    drawer_id = starter.reg_service(Drawer)
-    video_exposer_id = starter.reg_service(ExposeVideo)
-    cropper_id = starter.reg_service(HeadCropper)
-    fail_exposer_id = starter.reg_service(ExposeLastFail)
+    resizer_id = starter.reg_service(Resizer, min_runtime=0.033)
+    detect_id = starter.reg_service(Detect, min_runtime=0.033)
+    drawer_id = starter.reg_service(Drawer, min_runtime=0.033)
+    video_exposer_id = starter.reg_service(ExposeVideo, min_runtime=0.033)
+    cropper_id = starter.reg_service(HeadCropper, min_runtime=0.033)
+    fail_exposer_id = starter.reg_service(ExposeLastFail, min_runtime=0.033)
 
     starter.reg_connection(getter_id, resizer_id)
     starter.reg_connection(resizer_id, detect_id)

@@ -76,10 +76,11 @@ class PrintRandom(EdgineBase):
 if __name__ == "__main__":
     print("Canny edge detection example")
     starter = EdgineStarter(config_file="camera_canny_config.json")
-    getter_id = starter.reg_service(Getter)
-    resizer_id = starter.reg_service(Resizer)
-    canny_id = starter.reg_service(Canny)
+    getter_id = starter.reg_service(Getter, min_runtime=0.033)
+    resizer_id = starter.reg_service(Resizer, min_runtime=0.033)
+    canny_id = starter.reg_service(Canny, min_runtime=0.033)
     starter.reg_service(PrintRandom, min_runtime=10)
+
     starter.reg_connection(getter_id, resizer_id)
     starter.reg_connection(resizer_id, canny_id)
     q3 = starter.reg_sink(canny_id)
@@ -106,7 +107,7 @@ if __name__ == "__main__":
                     org=(10, 20))
 
         cv2.imshow('frame', img)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(33) & 0xFF == ord('q'):
             starter.stop()
             break
 

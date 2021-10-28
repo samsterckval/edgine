@@ -231,9 +231,9 @@ class PrintRandom(EdgineBase):
 if __name__ == "__main__":
     starter = EdgineStarter(config_file="coral_sound_classification_config.json")
 
-    getter_id = starter.reg_service(Getter)
-    combiner_id = starter.reg_service(Combiner)
-    normaliser_id = starter.reg_service(Normaliser)
+    getter_id = starter.reg_service(Getter, min_runtime=0.033)
+    combiner_id = starter.reg_service(Combiner, min_runtime=0.033)
+    normaliser_id = starter.reg_service(Normaliser, min_runtime=0.033)
     feature_id = starter.reg_service(FeatureExtractor, min_runtime=1)
     classifier_id = starter.reg_service(Classify, min_runtime=1)
     print_random_id = starter.reg_service(PrintRandom, min_runtime=10)

@@ -99,7 +99,15 @@ class EdgineBase(Process, ABC):
             return True
 
     def run(self) -> None:
-        """Do stuff"""
+        """
+        This function will be run when we start the services.
+        This can be either overwritten to implement your own runtime logic, or,
+        you can just overwrite the 'prerun' and 'blogic' functions for simplicity.
+
+        This default run function will automatically update the config at start, then run the 'prerun' function,
+        then start the main loop consisting of :
+        getting the input data (if applicable) -> update secondary data -> execute 'blogic' function -> post data
+        """
         self.info("Hello")
 
         self.cfg.update()
